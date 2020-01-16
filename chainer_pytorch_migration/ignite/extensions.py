@@ -104,7 +104,7 @@ def load_chainer_snapshot(engine, optimizer, snapshot_file,
                ExtensionTrainerAdapter loaded through the cpi tools
         snapshot_file_torch (str or file-like): Target torch snapshot.
                If not given, torch data would be loaded from
-               "`snapeshot_file`-torch".
+               "`snapshot_file`-torch".
 
     """
     if not id(engine) in engines:
@@ -114,7 +114,7 @@ def load_chainer_snapshot(engine, optimizer, snapshot_file,
     if snapshot_file_torch is None:
         # if the torch snapshot is not given, we pass the filename
         # of chainer snapshot and let the ExtensionUpdaterAdapter to generate
-        # the torch snapeshot name
+        # the torch snapshot name
         if isinstance(snapshot_file, six.string_types):
             adapter.torch_snapshot = snapshot_file
         else:
