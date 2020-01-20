@@ -22,6 +22,17 @@ def test_asarray_gpu():
     numpy.testing.assert_array_equal(a.get(), t.cpu().numpy())
 
 
+def test_asarray_multi_gpu():
+    if torch.cuda.device_count() < 2:
+        pytest.skip('Not enough GPUs')
+    t = torch.arange(5, dtype=torch.float32, device='cuda:1')
+    a = tensor.asarray(t)
+    assert isinstance(a, cupy.ndarray)
+    with cupy.cuda.Device(1):
+        a += 1
+        numpy.testing.assert_array_equal(a.get(), t.cpu().numpy())
+
+
 def test_astensor_cpu():
     a = numpy.arange(5, dtype=numpy.float32)
     t = tensor.astensor(a)
@@ -54,9 +65,11 @@ def test_asarray_empty_gpu():
     t = torch.tensor([], dtype=torch.float32, device='cuda')
     a = tensor.asarray(t)
 
+
 def test_astensor_empty_cpu():
     a = numpy.array([], dtype=numpy.float32)
     t = tensor.astensor(a)
+
 
 def test_astensor_empty_gpu():
     a = cupy.array([], dtype=cupy.float32)
@@ -64,8 +77,6 @@ def test_astensor_empty_gpu():
     assert isinstance(t, torch.Tensor)
     t += 1
     numpy.testing.assert_array_equal(a.get(), t.cpu().numpy())
-
-
 
 
 @pytest.mark.parametrize('dtype', [

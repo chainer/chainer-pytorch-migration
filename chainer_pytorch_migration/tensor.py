@@ -18,27 +18,29 @@ def asarray(tensor):
     """
     dev_type = tensor.device.type
     if dev_type == 'cuda':
+        dev_id = tensor.device.index
         cupy = cuda.cupy
-        # If the tensor is not allocated in torch (empty)
-        # we just create a new one
-        if tensor.data_ptr() == 0:
+        with cupy.cuda.Device(dev_id):
+            # If the tensor is not allocated in torch (empty)
+            # we just create a new one
+            if tensor.data_ptr() == 0:
+                return cupy.ndarray(
+                    tuple(tensor.shape),
+                    dtype=to_numpy_dtype(tensor.dtype))
+            itemsize = tensor.element_size()
+            storage = tensor.storage()
+            memptr = cupy.cuda.MemoryPointer(
+                cupy.cuda.UnownedMemory(
+                    storage.data_ptr(), storage.size() * itemsize, tensor,
+                ),
+                tensor.storage_offset() * itemsize,
+            )
             return cupy.ndarray(
                 tuple(tensor.shape),
-                dtype=to_numpy_dtype(tensor.dtype))
-        itemsize = tensor.element_size()
-        storage = tensor.storage()
-        memptr = cupy.cuda.MemoryPointer(
-            cupy.cuda.UnownedMemory(
-                storage.data_ptr(), storage.size() * itemsize, tensor,
-            ),
-            tensor.storage_offset() * itemsize,
-        )
-        return cupy.ndarray(
-            tuple(tensor.shape),
-            dtype=to_numpy_dtype(tensor.dtype),
-            memptr=memptr,
-            strides=tuple(s * itemsize for s in tensor.stride()),
-        )
+                dtype=to_numpy_dtype(tensor.dtype),
+                memptr=memptr,
+                strides=tuple(s * itemsize for s in tensor.stride()),
+            )
     if dev_type == 'cpu':
         return tensor.detach().numpy()
     raise ValueError('tensor on device "{}" is not supported', dev_type)
