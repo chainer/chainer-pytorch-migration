@@ -1,5 +1,4 @@
 import chainer_pytorch_migration as cpm
-
 from torch import nn
 
 
@@ -19,6 +18,10 @@ class LinkAsTorchModel(nn.Module):
         super(LinkAsTorchModel, self).__init__()
         for n, p in sorted(link.namedparams()):
             self.__setattr__(n, ChainerParameter(p))
+        self.link = link
+
+    def forward(self, *input):
+        return self.link.forward(*input)
 
 
 class ChainerParameter(nn.Parameter):
