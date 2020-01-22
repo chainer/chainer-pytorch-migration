@@ -1,9 +1,5 @@
-import inspect
-import sys
-
 import chainer
 from chainer.backends import cuda
-import torch
 
 from chainer_pytorch_migration import tensor
 
@@ -34,6 +30,10 @@ class TorchModule(chainer.Chain):
 
         with self.init_scope():
             for name, child in module.named_children():
+                if name == 'module':
+                    # DataParallel objects have the model stored as `module`
+                    # causing a conflict.
+                    name = 'wrapped_module'
                 setattr(self, name, TorchModule(child))
             for name, param in module.named_parameters(recurse=False):
                 ch_param = chainer.Parameter(tensor.asarray(param))
