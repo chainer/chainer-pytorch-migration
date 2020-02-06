@@ -296,8 +296,13 @@ class ExtensionTrainerAdapter(object):
 
         # Lets save torch objects using torch interface
         if isinstance(serializer, chainer.serializer.Serializer):
-            snap_path = self._chainer_trainer.get_extension(
-                '_Snapshot').filename
+            try:
+                snap_path = self._chainer_trainer.get_extension(
+                    '_Snapshot').filename
+            except ValueError:
+                # Look for the multinode snapshot instead
+                snap_path = self._chainer_trainer.get_extension(
+                    '_MultiNodeSnapshot').snapshot.filename
             snap_path = snap_path.format(self)
             snap_path = os.path.join(self.out, snap_path+'-torch')
             state = {'updater': {}}
