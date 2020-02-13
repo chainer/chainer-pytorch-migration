@@ -1,4 +1,5 @@
 import chainer_pytorch_migration as cpm
+import torch
 from torch import nn
 
 
@@ -21,7 +22,13 @@ class LinkAsTorchModel(nn.Module):
         self.link = link
 
     def forward(self, *input):
-        return self.link.forward(*input)
+        # The computation graph should be done in Chainer.
+        # Forward converts the input tensors to numpy/cupy arrays
+        # as accepted by Chainer.
+        # The return value should be a tensor as well.
+        input = [cpm.tensor.asarray(x) if isinstance(x, torch.Tensor)
+                 else x for x in input]
+        return cpm.tensor.astensor(self.link.forward(*input).array)
 
 
 class ChainerParameter(nn.Parameter):
