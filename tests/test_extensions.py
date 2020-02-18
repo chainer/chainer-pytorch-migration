@@ -1,8 +1,10 @@
+import os
+import tempfile
+import unittest
+
 import chainer
 import ignite
 import torch
-import unittest
-import os
 
 from ignite.engine import Events
 
@@ -143,3 +145,41 @@ class TestSnapshotLoadFile(SnapshotBaseMixin, unittest.TestCase):
                                          self.verify_snapshot_on_start,
                                          model=model, optimizer=optimizer)
                 engine.run([1, 2, 3], max_epochs=2)
+
+
+class TestResumeTrain(object):
+
+    def create_trainer(self, out_dir):
+        device = torch.device('cpu')
+        model = torch.nn.Linear(3, 1).to(device)
+        X = torch.randn(100, 3)
+        y = torch.randint(high=1, size=(100,)).to(torch.int64)
+        dataset = torch.utils.data.TensorDataset(X, y)
+        optimizer = torch.optim.Adam(model.parameters())
+        trainer = ignite.engine.create_supervised_trainer(
+            model, optimizer, torch.nn.functional.nll_loss, device=device)
+        optimizer.target = model
+        trainer.out = out_dir
+        snapshot = chainer.training.extensions.snapshot(
+            filename='snapshot_iter-{.updater.iteration}')
+        cpm.ignite.add_trainer_extension(
+            trainer, optimizer, snapshot, trigger=(1, 'iteration'))
+        return trainer, optimizer, dataset
+
+    def test_load_continue(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            trainer, optimizer, dataset = self.create_trainer(out_dir)
+            train_loader = torch.utils.data.DataLoader(
+                dataset, shuffle=True, batch_size=10)
+            trainer.run(train_loader, max_epochs=1)
+            trainer, optimizer, dataset = self.create_trainer(out_dir)
+            cpm.ignite.load_chainer_snapshot(
+                trainer, optimizer, os.path.join(out_dir, 'snapshot_iter-5'))
+
+            # Needs to defer the assert because of the delayed snapshot load.
+            @trainer.on(ignite.engine.Events.STARTED)
+            def assert_iteration_count(engine):
+                assert engine.state.iteration == 5
+
+            trainer.run(train_loader, max_epochs=3)
+            assert trainer.state.iteration == 30
