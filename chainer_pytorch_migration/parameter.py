@@ -1,9 +1,23 @@
-import chainer_pytorch_migration as cpm
+import chainer
 import torch
-from torch import nn
+
+import chainer_pytorch_migration as cpm
 
 
-class LinkAsTorchModel(nn.Module):
+def _named_children(link):
+    assert isinstance(link, chainer.Link)
+    if isinstance(link, chainer.Chain):
+        for name in link._children:
+            yield name, getattr(link, name)
+
+
+def _named_params(link):
+    assert isinstance(link, chainer.Link)
+    for name in link._params:
+        yield name, getattr(link, name)
+
+
+class LinkAsTorchModel(torch.nn.Module):
 
     '''Converts a Chainer Link to a PyTorch module.
 
@@ -16,9 +30,14 @@ class LinkAsTorchModel(nn.Module):
     '''
 
     def __init__(self, link):
-        super(LinkAsTorchModel, self).__init__()
-        for n, p in sorted(link.namedparams()):
-            self.__setattr__(n, ChainerParameter(p))
+        super().__init__()
+
+        for name, child in _named_children(link):
+            child_module = LinkAsTorchModel(child)
+            setattr(self, name, child_module)
+        for name, param in sorted(_named_params(link)):
+            setattr(self, name, ChainerParameter(param))
+
         self.link = link
 
     def forward(self, *input):
@@ -28,10 +47,50 @@ class LinkAsTorchModel(nn.Module):
         # The return value should be a tensor as well.
         input = [cpm.tensor.asarray(x) if isinstance(x, torch.Tensor)
                  else x for x in input]
-        return cpm.tensor.astensor(self.link.forward(*input).array)
+        outputs = self.link.forward(*input)
+        ret = self.__as_tensor(outputs)
+        return ret
+
+    def __as_tensor(self, value):
+        if isinstance(value, tuple):
+            return tuple(self.__as_tensor(x) for x in value)
+        if isinstance(value, list):
+            return [self.__as_tensor(x) for x in value]
+        if isinstance(value, chainer.Variable):
+            return _ChainerTensor(value)
+        return value
 
 
-class ChainerParameter(nn.Parameter):
+class _ChainerTensor(torch.Tensor):
+    '''
+    Torch tensor from which backprop can be performed.
+    '''
+    def __new__(cls, variable):
+        assert isinstance(variable, chainer.Variable)
+        obj = cpm.astensor(variable.array)
+        obj.__class__ = cls
+        return obj
+
+    def __init__(self, variable):
+        self._variable = variable
+
+    def backward(self, gradient=None, retain_graph=None, create_graph=False):
+        assert retain_graph is None or retain_graph == False  # True not supported
+        assert self._variable is not None
+
+        var = self._variable
+        if gradient is not None:
+            var.grad = cpm.tensor.asarray(gradient)
+        var.backward(
+            enable_double_backprop=create_graph,
+        )
+
+    def zero_(self):
+        super().zero_()
+        self._variable = None
+
+
+class ChainerParameter(torch.nn.Parameter):
 
     '''Wraps a Chainer parameter for use with a PyTorch optimizer.
 
@@ -46,6 +105,8 @@ class ChainerParameter(nn.Parameter):
         A :class:`ChainerParameter`.
     '''
 
+    __grad = None
+
     def __new__(cls, param):
         return super().__new__(cls, cpm.astensor(param.array))
 
@@ -55,11 +116,10 @@ class ChainerParameter(nn.Parameter):
 
     @property
     def grad(self):
-        # TODO(hvy): Cache constructed `torch.Tensor`.
-        if self._param.grad is not None:
-            return cpm.astensor(self._param.grad)
-        else:
-            return None
+        if self.__grad is None:
+            if self._param.grad is not None:
+                self.__grad = _ChainerTensor(self._param.grad_var)
+        return self.__grad
 
     @grad.setter
     def grad(self, g):
@@ -67,3 +127,8 @@ class ChainerParameter(nn.Parameter):
             self.grad[...] = g
         else:
             self._param.grad = cpm.asarray(g)
+
+    def zero_(self):
+        super().zero_()
+        self._param = None
+        self.__grad = None
