@@ -61,6 +61,34 @@ class LinkAsTorchModel(torch.nn.Module):
         return value
 
 
+class Optimizer(torch.optim.Optimizer):
+
+    def __init__(self, base_optimizer):
+        assert isinstance(base_optimizer, torch.optim.Optimizer)
+        super().__init__(base_optimizer.param_groups, base_optimizer.defaults)
+        self._base_optimizer = base_optimizer
+
+    def __getattr__(self, name):
+        if name in ('step', 'zero_grad', '_base_optimizer'):
+            return object.__getattribute__(self, name)
+        return getattr(self._base_optimizer, name)
+
+    def step(self, closure=None):
+        assert closure is None
+        for param_group in self._base_optimizer.param_groups:
+            for param in param_group['params']:
+                assert isinstance(param, ChainerParameter)
+                param.grad.copy_(torch.tensor(param._param.grad))
+        self._base_optimizer.step()
+
+    def zero_grad(self):
+        self._base_optimizer.zero_grad()
+        for param_group in self._base_optimizer.param_groups:
+            for param in param_group['params']:
+                assert isinstance(param, ChainerParameter)
+                param._param.zerograd()
+
+
 class _ChainerTensor(torch.Tensor):
     '''
     Torch tensor from which backprop can be performed.
@@ -87,7 +115,7 @@ class _ChainerTensor(torch.Tensor):
 
     def zero_(self):
         super().zero_()
-        self._variable = None
+        self._variable.array[...] = 0
 
 
 class ChainerParameter(torch.nn.Parameter):
@@ -130,5 +158,6 @@ class ChainerParameter(torch.nn.Parameter):
 
     def zero_(self):
         super().zero_()
-        self._param = None
+        self._param.cleargrad()
+        self._param.array[...] = 0
         self.__grad = None

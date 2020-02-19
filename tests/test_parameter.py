@@ -125,14 +125,17 @@ def test_link_as_torch_model_nested():
         def forward(self, x2):
             return self.p2 * self.l1(x2)
 
-    # Dummy optimizer that always writes the constant value 9.
+    # Dummy optimizer that always writes a constant value.
     class MyOptim(torch.optim.Optimizer):
         def __init__(self, params):
             super().__init__(params, {})
+            self.constant = None
+        def set_constant(self, constant):
+            self.constant = constant
         def step(self):
             for group in self.param_groups:
                 for param in group['params']:
-                    param.data[...] = 9
+                    param.data[...] = self.constant
 
     link = MyLink2()
     module = cpm.LinkAsTorchModel(link)
@@ -143,27 +146,81 @@ def test_link_as_torch_model_nested():
     assert len(list(module.l1.parameters(recurse=False))) == 1
     assert len(list(module.parameters(recurse=True))) == 2
 
-    optimizer = MyOptim(module.parameters())
+    optimizer = cpm.Optimizer(MyOptim(module.parameters()))
+
+    #--------------
+    # Iteration 1
+    #--------------
     x = numpy.array([4], dtype)
 
-    # Forward
+    ### Forward
     y = module(x)
     assert isinstance(y, torch.Tensor)
     numpy.testing.assert_array_equal(y.detach().numpy(), [24])
 
-    # Backward
+    ### Backward
     y.backward()
 
+    numpy.testing.assert_array_equal(link.l1.p1.grad, [12])
+    numpy.testing.assert_array_equal(link.p2.grad, [8])
+
+    ### Optimizer step
+    optimizer.set_constant(3)
+    optimizer.step()
+
+    # (Torch grads are only synchronized after step())
     numpy.testing.assert_array_equal(module.l1.p1.grad.detach().numpy(), [12])
     numpy.testing.assert_array_equal(module.p2.grad.detach().numpy(), [8])
 
-    # Optimizer step
+    numpy.testing.assert_array_equal(link.p2.array, [3])
+    numpy.testing.assert_array_equal(link.l1.p1.array, [3])
+    numpy.testing.assert_array_equal(module.p2.detach().numpy(), [3])
+    numpy.testing.assert_array_equal(module.l1.p1.detach().numpy(), [3])
+
+    ### Zero grad
+    optimizer.zero_grad()
+
+    numpy.testing.assert_array_equal(link.l1.p1.grad, [0])
+    numpy.testing.assert_array_equal(link.p2.grad, [0])
+    numpy.testing.assert_array_equal(module.l1.p1.grad.detach().numpy(), [0])
+    numpy.testing.assert_array_equal(module.p2.grad.detach().numpy(), [0])
+
+    #--------------
+    # Iteration 2
+    #--------------
+    x = numpy.array([5], dtype)
+
+    ### Forward
+    y = module(x)
+    assert isinstance(y, torch.Tensor)
+    numpy.testing.assert_array_equal(y.detach().numpy(), [45])
+
+    ### Backward
+    y.backward()
+
+    numpy.testing.assert_array_equal(link.l1.p1.grad, [15])
+    numpy.testing.assert_array_equal(link.p2.grad, [15])
+
+    ### Optimizer step
+    optimizer.set_constant(9)
     optimizer.step()
+
+    # (Torch grads are only synchronized after step())
+    numpy.testing.assert_array_equal(module.l1.p1.grad.detach().numpy(), [15])
+    numpy.testing.assert_array_equal(module.p2.grad.detach().numpy(), [15])
 
     numpy.testing.assert_array_equal(link.p2.array, [9])
     numpy.testing.assert_array_equal(link.l1.p1.array, [9])
     numpy.testing.assert_array_equal(module.p2.detach().numpy(), [9])
     numpy.testing.assert_array_equal(module.l1.p1.detach().numpy(), [9])
+
+    ### Zero grad
+    optimizer.zero_grad()
+
+    numpy.testing.assert_array_equal(link.l1.p1.grad, [0])
+    numpy.testing.assert_array_equal(link.p2.grad, [0])
+    numpy.testing.assert_array_equal(module.l1.p1.grad.detach().numpy(), [0])
+    numpy.testing.assert_array_equal(module.p2.grad.detach().numpy(), [0])
 
 
 def test_link_as_torch_model_uninitialized():
