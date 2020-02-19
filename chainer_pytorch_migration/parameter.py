@@ -77,7 +77,7 @@ class Optimizer(torch.optim.Optimizer):
         for param_group in self._base_optimizer.param_groups:
             for param in param_group['params']:
                 assert isinstance(param, ChainerParameter)
-                param.grad.copy_(torch.tensor(param._param.grad))
+                param.grad.copy_(cpm.astensor(param._param.grad))
         self._base_optimizer.step(closure)
 
     def zero_grad(self):
