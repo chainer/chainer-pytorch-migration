@@ -132,7 +132,7 @@ def test_link_as_torch_model_nested():
             self.constant = None
         def set_constant(self, constant):
             self.constant = constant
-        def step(self):
+        def step(self, closure=None):
             for group in self.param_groups:
                 for param in group['params']:
                     param.data[...] = self.constant
