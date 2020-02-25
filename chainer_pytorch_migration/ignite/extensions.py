@@ -299,7 +299,7 @@ class ExtensionTrainerAdapter(object):
         # Lets save torch objects using torch interface
         if isinstance(serializer, chainer.serializer.Serializer):
             name, ext = self.cur_ext
-            if '_MultiNodeSnapshot' in name:
+            if type(ext).__name__ == '_MultiNodeSnapshot':
                 ext = ext.snapshot
             snap_path = ext.filename.format(self)
             snap_path = os.path.join(self.out, snap_path+'-torch')
