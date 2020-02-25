@@ -277,6 +277,8 @@ class ExtensionTrainerAdapter(object):
     def run_extensions(self):
         for name, entry in self.extensions:
             if entry.trigger(self):
+                ext = entry.extension
+                self.cur_ext = (name, ext)
                 entry.extension(self)
 
     def extend(self, extension):
@@ -296,9 +298,10 @@ class ExtensionTrainerAdapter(object):
 
         # Lets save torch objects using torch interface
         if isinstance(serializer, chainer.serializer.Serializer):
-            snap_path = self._chainer_trainer.get_extension(
-                '_Snapshot').filename
-            snap_path = snap_path.format(self)
+            name, ext = self.cur_ext
+            if type(ext).__name__ == '_MultiNodeSnapshot':
+                ext = ext.snapshot
+            snap_path = ext.filename.format(self)
             snap_path = os.path.join(self.out, snap_path+'-torch')
             state = {'updater': {}}
             self.updater.serialize(serializer['updater'], state['updater'])
