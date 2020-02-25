@@ -31,6 +31,16 @@ class LinkAsTorchModel(torch.nn.Module):
 
     def __init__(self, link):
         super().__init__()
+        uninitialized_params = [
+            n for n, p in sorted(_named_params(link)) if p.array is None]
+        if uninitialized_params:
+            raise RuntimeError(
+                'Link with uninitialized parameters cannot be wrapped with '
+                'LinkAsTorchModel. '
+                'Please initialize parameters before wrapping, by feeding a '
+                'dummy batch to the Chainer model, for example. '
+                'Uninitialized params: [{}]'.format(
+                    ', '.join(repr(n) for n in uninitialized_params)))
 
         for name, child in _named_children(link):
             child_module = LinkAsTorchModel(child)
