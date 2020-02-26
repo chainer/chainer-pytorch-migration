@@ -4,3 +4,4 @@ from .datasets import TransformDataset
 from .links import TorchModule
 from .parameter import ChainerParameter, LinkAsTorchModel, Optimizer
 from .tensor import asarray, astensor, to_numpy_dtype
+from .device import to_chainer_device
