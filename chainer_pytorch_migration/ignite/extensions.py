@@ -171,10 +171,11 @@ class ExtensionUpdaterAdapter(object):
 
         if isinstance(serializer, chainer.serializer.Serializer):
             state['iteration'] = self.engine.state.iteration
-            state['epoch'] = self.engine.state.epoch
+            state['epoch_length'] = self.engine.state.epoch_length
         elif isinstance(serializer, chainer.serializer.Deserializer):
             self.engine.state.iteration = state['iteration']
-            self.engine.state.epoch = state['epoch']
+            self.engine.state.epoch = (state['iteration']
+                                       // state['epoch_length'])
 
 
 class ExtensionTrainerAdapter(object):
