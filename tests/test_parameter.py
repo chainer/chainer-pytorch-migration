@@ -231,7 +231,7 @@ def test_link_as_torch_model_uninitialized():
     with link.init_scope():
         link.a = a_chainer_param
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         torched = cpm.LinkAsTorchModel(link)
         torched.parameters()
 
