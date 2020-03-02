@@ -19,6 +19,7 @@ def _named_params(link):
 
 # Corresponding to ``torch._C._nn._parse_to``.
 def _parse_to(*args, device=None, dtype=None, non_blocking=False):
+    args = list(args)
 
     if len(args) > 0:
         if isinstance(args[0], torch.Tensor):
@@ -28,7 +29,7 @@ def _parse_to(*args, device=None, dtype=None, non_blocking=False):
         elif isinstance(args[0], torch.dtype):
             dtype = args.pop(0)
         elif isinstance(args[0], (str, torch.device)):
-            device = torch.device(args.pop(0))
+            device = args.pop(0)
             if len(args) > 0 and isinstance(args[0], torch.dtype):
                 dtype = torch.dtype(args.pop(0))
         else:
@@ -40,7 +41,17 @@ def _parse_to(*args, device=None, dtype=None, non_blocking=False):
         if len(args) > 0:
             raise TypeError('Received an invalid combination of arguments.')
 
+    if device is not None:
+        device = torch.device(device)
+
     return device, dtype, non_blocking
+
+
+def _setattr_recursive(obj, name, value):
+    attr_list = name.split('.')
+    for attr in attr_list[:-1]:
+        obj = getattr(obj, attr)
+    setattr(obj, attr_list[-1], value)
 
 
 class LinkAsTorchModel(torch.nn.Module):
@@ -101,12 +112,18 @@ class LinkAsTorchModel(torch.nn.Module):
 
     def to(self, *args, **kwargs):
         device, dtype, non_blocking = _parse_to(*args, **kwargs)
-        device = cpm.to_chainer_device(torch.device(device))
+        chainer_device = cpm.to_chainer_device(device)
         if dtype is not None:
             raise NotImplementedError
         if non_blocking:
             raise NotImplementedError
-        return LinkAsTorchModel(self.link, _device=device)
+        for name, value in self.named_parameters():
+            assert isinstance(value, ChainerParameter)
+            param = value._param
+            param.to_device(chainer_device)
+            value = ChainerParameter(param)
+            _setattr_recursive(self, name, value)
+        return self
 
 
 class Optimizer(torch.optim.Optimizer):
