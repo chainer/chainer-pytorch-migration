@@ -17,6 +17,32 @@ def _named_params(link):
         yield name, getattr(link, name)
 
 
+# Corresponding to ``torch._C._nn._parse_to``.
+def _parse_to(*args, device=None, dtype=None, non_blocking=False):
+
+    if len(args) > 0:
+        if isinstance(args[0], torch.Tensor):
+            tensor = args.pop(0)
+            device = tensor.device
+            dtype = tensor.dtype
+        elif isinstance(args[0], torch.dtype):
+            dtype = args.pop(0)
+        elif isinstance(args[0], (str, torch.device)):
+            device = torch.device(args.pop(0))
+            if len(args) > 0 and isinstance(args[0], torch.dtype):
+                dtype = torch.dtype(args.pop(0))
+        else:
+            raise TypeError('Received an invalid combination of arguments.')
+
+        if len(args) > 0:
+            non_blocking = bool(args.pop(0))
+
+        if len(args) > 0:
+            raise TypeError('Received an invalid combination of arguments.')
+
+    return device, dtype, non_blocking
+
+
 class LinkAsTorchModel(torch.nn.Module):
 
     '''Converts a Chainer Link to a PyTorch module.
@@ -73,10 +99,13 @@ class LinkAsTorchModel(torch.nn.Module):
             return _ChainerTensor(value)
         return value
 
-    def to(self, *, device):
-        if device is None:
-            return self
+    def to(self, *args, **kwargs):
+        device, dtype, non_blocking = _parse_to(*args, **kwargs)
         device = cpm.to_chainer_device(torch.device(device))
+        if dtype is not None:
+            raise NotImplementedError
+        if non_blocking:
+            raise NotImplementedError
         return LinkAsTorchModel(self.link, _device=device)
 
 
