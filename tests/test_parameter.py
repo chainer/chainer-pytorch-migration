@@ -274,3 +274,24 @@ def test_named_params():
     numpy.testing.assert_array_equal(a_arr, n_params['a'].detach())
     assert 'b' in n_params
     numpy.testing.assert_array_equal(b_arr, n_params['b'].detach())
+
+
+def test_link_to_device():
+    a_arr = numpy.ones((3, 2), 'float32')
+    a_chainer_param = chainer.Parameter(a_arr)
+    # 0-size parameter
+    b_arr = numpy.ones((2, 0, 1), 'float32')
+    b_chainer_param = chainer.Parameter(b_arr)
+
+    link = chainer.Link()
+    with link.init_scope():
+        link.a = a_chainer_param
+        link.b = b_chainer_param
+
+    torched = cpm.LinkAsTorchModel(link)
+    ret = torched.to('cuda')
+
+    assert torched is ret
+
+    for name, param in torched.named_parameters():
+        assert param.device.type == 'cuda'
