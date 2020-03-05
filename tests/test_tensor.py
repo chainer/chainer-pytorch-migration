@@ -59,22 +59,26 @@ def test_astensor_negative_stride():
 def test_asarray_empty_cpu():
     t = torch.tensor([], dtype=torch.float32)
     a = tensor.asarray(t)
+    assert isinstance(a, numpy.ndarray)
 
 
 def test_asarray_empty_gpu():
     t = torch.tensor([], dtype=torch.float32, device='cuda')
     a = tensor.asarray(t)
+    assert isinstance(a, cupy.ndarray)
 
 
 def test_astensor_empty_cpu():
     a = numpy.array([], dtype=numpy.float32)
     t = tensor.astensor(a)
+    assert t.device.type == 'cpu'
 
 
 def test_astensor_empty_gpu():
     a = cupy.array([], dtype=cupy.float32)
     t = tensor.astensor(a)
     assert isinstance(t, torch.Tensor)
+    assert t.device.type == 'cuda'
     t += 1
     numpy.testing.assert_array_equal(a.get(), t.cpu().numpy())
 
